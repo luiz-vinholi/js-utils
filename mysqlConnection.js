@@ -2,7 +2,7 @@ const mysql = require('mysql')
 
 class MySqlConnection {
   constructor () {
-    this.connection = null
+    this.databaseNames = []
   }
 
   static getInstance () {
@@ -12,15 +12,24 @@ class MySqlConnection {
     return MySqlConnection.instance
   }
 
-  connect () {
+  connect (configs = [{
+    host: process.env.DBHOST,
+    user: process.env.DBUSER,
+    password: process.env.DBHOSTPASSWORD,
+    database: process.env.DBDATABASE
+  }]) {
     return new Promise((resolve, reject) => {
-      this.connection = new Connection(mysql.createConnection({
-        host: process.env.DBHOST,
-        user: process.env.DBUSER,
-        password: process.env.DBHOSTPASSWORD,
-        database: process.env.DBDATABASE
-      }))
-      const connections = [this.connection]
+      const connections = configs.map((config) => {
+        const database = config.database
+        this.databaseNames.push(database)
+        this[database] = new Connection(mysql.createConnection({
+          host: process.env.DBHOST,
+          user: process.env.DBUSER,
+          password: process.env.DBHOSTPASSWORD,
+          database
+        }))
+        return this[database]
+      })
       return Promise.all(connections.map(async (c) => {
         return new Promise((resolve, reject) => {
           c.connection.connect((err) => {
@@ -37,10 +46,12 @@ class MySqlConnection {
     })
   }
 
-  getConnection (name = 'db') {
-    return {
-      db: this.connection
-    }[name]
+  getConnection (name = process.env.DBDATABASE) {
+    if (this.databaseNames.includes(name)) {
+      return this[name]
+    } else {
+      throw new Error('Database not found')
+    }
   }
 }
 
